@@ -20,6 +20,7 @@ export interface Job {
   filePath: string;
   error: string;
   createdAt: number;
+  durationUs: number; // video duration in microseconds (for upscale progress)
 }
 
 const jobs = new Map<string, Job>();
@@ -49,6 +50,7 @@ export function createJob(url: string, upscale: boolean): Job {
     filePath: "",
     error: "",
     createdAt: Date.now(),
+    durationUs: 0,
   };
   jobs.set(job.id, job);
 
@@ -152,16 +154,32 @@ async function processJob(job: Job) {
     // Step 3: Upscale if requested
     if (job.upscale) {
       job.status = "upscaling";
+      job.progress = 0;
       const upscaledName = path.parse(finalName).name + "_2x" + path.parse(finalName).ext;
       const upscaledPath = path.join(jobDir, upscaledName);
 
+      // Get video duration for progress tracking
+      try {
+        const probe = await runCommand("ffprobe", [
+          "-v", "error",
+          "-show_entries", "format=duration",
+          "-of", "default=noprint_wrappers=1:nokey=1",
+          downloadedFile,
+        ]);
+        const durationSec = parseFloat(probe.stdout.trim());
+        if (durationSec > 0) job.durationUs = durationSec * 1_000_000;
+      } catch {}
+
+      // CRF 23 = good quality, much smaller than CRF 18 (visually lossless)
+      // faststart = streamable, immediate playback start
       const upResult = await runWithProgress(job, FFMPEG, [
         "-y", "-i", downloadedFile,
         "-vf", "scale=iw*2:ih*2:flags=lanczos",
-        "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+        "-c:v", "libx264", "-crf", "23", "-preset", "fast",
+        "-movflags", "+faststart",
         "-c:a", "copy",
-        "-progress", "pipe:1",   // Machine-readable progress to stdout
-        "-nostats",               // No stats to stderr
+        "-progress", "pipe:1",
+        "-nostats",
         upscaledPath,
       ], "upscaling");
 
@@ -181,6 +199,22 @@ async function processJob(job: Job) {
     job.status = "error";
     job.error = err.message || "Unknown error";
   }
+}
+
+function runCommand(
+  cmd: string,
+  args: string[]
+): Promise<{ stdout: string; stderr: string; code: number }> {
+  return new Promise((resolve) => {
+    const proc = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+
+    proc.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
+    proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+    proc.on("close", (code) => resolve({ stdout, stderr, code: code ?? 1 }));
+    proc.on("error", () => resolve({ stdout, stderr, code: 1 }));
+  });
 }
 
 function runWithProgress(
@@ -210,19 +244,30 @@ function runWithProgress(
         }
       } else if (phase === "upscaling") {
         // ffmpeg -progress outputs key=value pairs
+        // Parse out_time_us to calculate real percentage
         const lines = text.split("\n");
+        let currentUs = 0;
         for (const line of lines) {
           const outTime = line.match(/^out_time_us=(\d+)/);
           if (outTime) {
-            const us = parseInt(outTime[1]);
-            // Estimate based on typical video duration — rough but better than nothing
-            // We'll use a heuristic: progress based on output
-            job.speed = "processing";
+            currentUs = parseInt(outTime[1]);
           }
-          const progressMatch = line.match(/^progress=(continue|end)/);
-          if (progressMatch && progressMatch[1] === "end") {
-            job.progress = 95;
+          const speedMatch = line.match(/^speed=(\S+)/);
+          if (speedMatch) {
+            job.speed = speedMatch[1] + "x";
           }
+          const fpsMatch = line.match(/^fps=(\S+)/);
+          if (fpsMatch) {
+            job.eta = fpsMatch[1] + " fps";
+          }
+        }
+        if (currentUs > 0 && job.durationUs > 0) {
+          const pct = Math.min(99, Math.round((currentUs / job.durationUs) * 100));
+          job.progress = pct;
+        }
+        // Check for end marker
+        if (text.includes("progress=end")) {
+          job.progress = 100;
         }
       }
     });
