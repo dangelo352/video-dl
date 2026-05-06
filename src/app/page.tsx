@@ -5,89 +5,78 @@ import { useState, useRef, FormEvent, useEffect } from "react";
 type JobStatus = "resolving" | "downloading" | "upscaling" | "done" | "error";
 
 interface JobState {
-  jobId: string;
   status: JobStatus;
   progress: number;
   speed: string;
   eta: string;
-  error: string;
   filename: string;
+  error: string;
 }
 
 export default function Home() {
   const [url, setUrl] = useState("");
   const [upscale, setUpscale] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<JobState | null>(null);
   const [status, setStatus] = useState<JobStatus | "idle">("idle");
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
-  const pollingForRef = useRef<string | null>(null);
+  const esRef = useRef<EventSource | null>(null);
 
-  // Poll for progress
+  // Connect SSE when we have a jobId
   useEffect(() => {
-    if (!job) return;
-    if (job.status === "done" || job.status === "error") return;
-    
-    // Prevent duplicate intervals for same job
-    if (pollingForRef.current === job.jobId) return;
-    
-    // Clear any previous polling
-    if (pollRef.current) clearInterval(pollRef.current);
-    
-    pollingForRef.current = job.jobId;
+    if (!jobId) return;
 
-    const poll = async () => {
+    // Close any existing connection
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
+
+    const es = new EventSource(`/api/download/${jobId}/stream`);
+    esRef.current = es;
+
+    es.onmessage = (event) => {
       try {
-        const res = await fetch(`/api/download/${job.jobId}`);
-        if (!res.ok) return;
-        const data: JobState = await res.json();
-
-        // STOP immediately if terminal state
-        if (data.status === "done" || data.status === "error") {
-          if (pollRef.current) {
-            clearInterval(pollRef.current);
-            pollRef.current = null;
-          }
-          pollingForRef.current = null;
-        }
-
+        const data: JobState = JSON.parse(event.data);
         setJob(data);
         setStatus(data.status);
 
         if (data.status === "done") {
+          es.close();
+          esRef.current = null;
           // Trigger file download
           const a = document.createElement("a");
-          a.href = `/api/download/${job.jobId}`;
+          a.href = `/api/download/${jobId}`;
           a.download = data.filename || "video.mp4";
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
         } else if (data.status === "error") {
+          es.close();
+          esRef.current = null;
           setError(data.error || "Something went wrong");
         }
       } catch {}
     };
 
-    pollRef.current = setInterval(poll, 300);
+    es.onerror = () => {
+      // EventSource auto-reconnects; we'll let it
+    };
 
     return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      pollingForRef.current = null;
+      es.close();
+      esRef.current = null;
     };
-  }, [job?.jobId, job?.status]);
+  }, [jobId]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const trimmed = url.trim();
     if (!trimmed) return;
 
-    let parsed: URL;
     try {
-      parsed = new URL(trimmed);
+      new URL(trimmed);
     } catch {
       setError("That doesn't look like a valid URL");
       setStatus("error");
@@ -95,7 +84,7 @@ export default function Home() {
     }
 
     setError("");
-    setStatus("resolving");
+    setJob(null);
 
     try {
       const res = await fetch("/api/download", {
@@ -109,9 +98,9 @@ export default function Home() {
         throw new Error(data.error || `Request failed (${res.status})`);
       }
 
-      const data: JobState = await res.json();
-      setJob(data);
-      setStatus(data.status);
+      const data = await res.json();
+      setJobId(data.jobId);
+      setStatus("resolving");
     } catch (err: any) {
       setError(err.message || "Something went wrong");
       setStatus("error");
@@ -119,11 +108,14 @@ export default function Home() {
   };
 
   const reset = () => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-    pollingForRef.current = null;
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
     setStatus("idle");
     setError("");
     setUrl("");
+    setJobId(null);
     setJob(null);
     setUpscale(false);
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -135,6 +127,8 @@ export default function Home() {
     upscaling: "Upscaling 2×…",
     done: "Complete",
   };
+
+  const isActive = jobId !== null && status !== "done" && status !== "error";
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-16">
@@ -161,7 +155,7 @@ export default function Home() {
                 if (error) setError("");
               }}
               placeholder="https://x.com/user/status/123…"
-              disabled={job !== null && job.status !== "done" && job.status !== "error"}
+              disabled={isActive}
               className="w-full h-14 px-4 text-base bg-surface-raised border border-border rounded-xl text-ink placeholder:text-ink-dim focus:border-border-focus focus:ring-0 disabled:opacity-50 transition-colors font-mono text-sm"
               autoFocus
             />
@@ -180,7 +174,7 @@ export default function Home() {
               role="switch"
               aria-checked={upscale}
               onClick={() => setUpscale(!upscale)}
-              disabled={job !== null && job.status !== "done" && job.status !== "error"}
+              disabled={isActive}
               className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors ${
                 upscale ? "bg-accent" : "bg-surface-hover"
               }`}
@@ -196,22 +190,20 @@ export default function Home() {
           {/* Submit */}
           <button
             type="submit"
-            disabled={
-              !url.trim() || (job !== null && job.status !== "done" && job.status !== "error")
-            }
+            disabled={!url.trim() || isActive}
             className="w-full h-12 rounded-xl bg-ink text-surface font-medium text-sm transition-all hover:bg-ink/90 disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.98]"
           >
-            {job && job.status !== "done" && job.status !== "error"
-              ? phaseLabel[job.status] || "Working…"
+            {isActive
+              ? phaseLabel[status] || "Working…"
               : "Download"}
           </button>
         </form>
 
         {/* Progress bar */}
-        {job && job.status !== "done" && job.status !== "error" && (
+        {job && status !== "done" && status !== "error" && (
           <div className="mt-6 space-y-3">
             <div className="flex items-center justify-between text-xs text-ink-muted">
-              <span>{phaseLabel[job.status] || "Working…"}</span>
+              <span>{phaseLabel[status] || "Working…"}</span>
               <span className="font-mono tabular-nums">{job.progress}%</span>
             </div>
             <div className="h-2 bg-surface-raised rounded-full overflow-hidden">
