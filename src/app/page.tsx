@@ -11,6 +11,7 @@ interface JobState {
   eta: string;
   filename: string;
   error: string;
+  upscale: boolean;
 }
 
 export default function Home() {
@@ -45,13 +46,7 @@ export default function Home() {
         if (data.status === "done") {
           es.close();
           esRef.current = null;
-          // Trigger file download
-          const a = document.createElement("a");
-          a.href = `/api/download/${jobId}`;
-          a.download = data.filename || "video.mp4";
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
+          // Don't auto-download — let user preview first
         } else if (data.status === "error") {
           es.close();
           esRef.current = null;
@@ -219,14 +214,37 @@ export default function Home() {
           </div>
         )}
 
-        {/* Done */}
-        {status === "done" && (
-          <div className="mt-6 space-y-3">
-            <div className="flex items-center gap-2 text-sm text-success">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Downloaded — {job?.filename || "check your downloads"}
+        {/* Done — Video Preview Card */}
+        {status === "done" && jobId && (
+          <div className="mt-6 space-y-4">
+            {/* Video Player */}
+            <div className="bg-surface-raised border border-border rounded-xl overflow-hidden">
+              <video
+                controls
+                autoPlay
+                playsInline
+                className="w-full"
+                style={{ maxHeight: "60vh" }}
+                src={`/api/download/${jobId}`}
+              />
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm truncate text-ink">{job?.filename || "video.mp4"}</p>
+                  <p className="text-xs text-ink-dim mt-0.5">
+                    {job?.upscale ? "Upscaled 2×" : "Original quality"}
+                  </p>
+                </div>
+                <a
+                  href={`/api/download/${jobId}?dl=1`}
+                  download={job?.filename}
+                  className="ml-3 shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/15 text-accent text-xs font-medium hover:bg-accent/25 transition-colors"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Download
+                </a>
+              </div>
             </div>
             <button
               onClick={reset}

@@ -115,8 +115,10 @@ async function processJob(job: Job) {
     ], "resolving");
 
     if (peek.code !== 0) {
-      const errDetail = peek.stderr.split('\n').filter(l => l.includes('ERROR') || l.includes('WARNING') || l.includes('error')).slice(-3).join(' | ') || peek.stderr.slice(-200);
-      throw new Error(`URL resolve failed: ${errDetail}`);
+      const stderr = peek.stderr || "";
+      const filtered = stderr.split('\n').filter(l => /ERROR|WARNING|error/i.test(l)).slice(-3).join(' | ');
+      const detail = filtered || stderr.slice(-300) || `exit code ${peek.code}`;
+      throw new Error(`URL resolve failed: ${detail}`);
     }
 
     const rawFilename = peek.stdout.trim();
