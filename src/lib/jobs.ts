@@ -1,8 +1,9 @@
 import { spawn } from "child_process";
-import { mkdir, readFile, stat, unlink } from "fs/promises";
+import { mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import os from "os";
+import { uploadFileToR2 } from "@/lib/r2";
 
 export const DOWNLOAD_DIR = path.join(os.tmpdir(), "video-dl");
 const YT_DLP = process.env.YT_DLP_PATH || "yt-dlp";
@@ -19,6 +20,7 @@ export interface Job {
   eta: string;      // e.g. "00:15"
   filename: string;
   filePath: string;
+  r2Key: string;
   error: string;
   createdAt: number;
   durationUs: number; // video duration in microseconds (for upscale progress)
@@ -50,6 +52,7 @@ export function createJob(url: string, upscale: number): Job {
     eta: "",
     filename: "",
     filePath: "",
+    r2Key: "",
     error: "",
     createdAt: Date.now(),
     durationUs: 0,
@@ -191,9 +194,25 @@ async function processJob(job: Job) {
       }
     }
 
+    const r2Key = `videos/${job.id}/${finalName}`;
+    await uploadFileToR2({
+      key: r2Key,
+      filePath: downloadedFile,
+      contentType: finalName.toLowerCase().endsWith(".webm")
+        ? "video/webm"
+        : finalName.toLowerCase().endsWith(".mov")
+        ? "video/quicktime"
+        : finalName.toLowerCase().endsWith(".mkv")
+        ? "video/x-matroska"
+        : "video/mp4",
+    });
+
+    await unlink(downloadedFile).catch(() => {});
+
     job.status = "done";
     job.filename = finalName;
-    job.filePath = downloadedFile;
+    job.filePath = "";
+    job.r2Key = r2Key;
     job.progress = 100;
     job.eta = "Done";
   } catch (err: any) {
