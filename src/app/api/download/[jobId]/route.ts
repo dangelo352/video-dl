@@ -31,6 +31,7 @@ export async function GET(
       error: job.error,
       filename: job.filename,
       upscale: job.upscale,
+      scale: job.scale,
     });
   }
 

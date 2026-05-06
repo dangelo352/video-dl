@@ -11,7 +11,8 @@ const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
 export interface Job {
   id: string;
   url: string;
-  upscale: boolean;
+  scale: number; // 0=no upscale, 2=2x, 4=4x
+  upscale: boolean; // derived: scale > 0
   status: "resolving" | "downloading" | "upscaling" | "done" | "error";
   progress: number; // 0-100
   speed: string;    // e.g. "2.5 MiB/s"
@@ -37,11 +38,12 @@ export function getJob(jobId: string): Job | undefined {
   return jobs.get(jobId);
 }
 
-export function createJob(url: string, upscale: boolean): Job {
+export function createJob(url: string, upscale: number): Job {
   const job: Job = {
     id: createJobId(),
     url,
-    upscale,
+    scale: upscale,
+    upscale: upscale > 0,
     status: "resolving",
     progress: 0,
     speed: "",
@@ -155,7 +157,7 @@ async function processJob(job: Job) {
     if (job.upscale) {
       job.status = "upscaling";
       job.progress = 0;
-      const upscaledName = path.parse(finalName).name + "_2x" + path.parse(finalName).ext;
+      const upscaledName = path.parse(finalName).name + `_${job.scale}x` + path.parse(finalName).ext;
       const upscaledPath = path.join(jobDir, upscaledName);
 
       // Get video duration for progress tracking
@@ -170,11 +172,10 @@ async function processJob(job: Job) {
         if (durationSec > 0) job.durationUs = durationSec * 1_000_000;
       } catch {}
 
-      // CRF 23 = good quality, much smaller than CRF 18 (visually lossless)
-      // faststart = streamable, immediate playback start
+      // CRF 23 = good quality, much smaller than CRF 18
       const upResult = await runWithProgress(job, FFMPEG, [
         "-y", "-i", downloadedFile,
-        "-vf", "scale=iw*2:ih*2:flags=lanczos",
+        "-vf", `scale=iw*${job.scale}:ih*${job.scale}:flags=lanczos`,
         "-c:v", "libx264", "-crf", "23", "-preset", "fast",
         "-movflags", "+faststart",
         "-c:a", "copy",

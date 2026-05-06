@@ -19,7 +19,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { url, upscale = false } = body;
+  const { url, upscale = 0 } = body;
+  const scale = typeof upscale === "number" ? upscale : (upscale ? 2 : 0);
 
   if (!url) {
     return NextResponse.json({ error: "URL is required" }, { status: 400 });
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid URL format" }, { status: 400 });
   }
 
-  const job = createJob(url, upscale);
+  const job = createJob(url, scale);
 
   return NextResponse.json({
     jobId: job.id,

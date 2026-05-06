@@ -12,11 +12,12 @@ interface JobState {
   filename: string;
   error: string;
   upscale: boolean;
+  scale: number;
 }
 
 export default function Home() {
   const [url, setUrl] = useState("");
-  const [upscale, setUpscale] = useState(false);
+  const [scale, setScale] = useState<1 | 2 | 4>(1);
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<JobState | null>(null);
   const [status, setStatus] = useState<JobStatus | "idle">("idle");
@@ -95,7 +96,7 @@ export default function Home() {
       const res = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: trimmed, upscale }),
+        body: JSON.stringify({ url: trimmed, upscale: scale > 1 ? scale : 0 }),
       });
 
       if (!res.ok) {
@@ -122,14 +123,14 @@ export default function Home() {
     setUrl("");
     setJobId(null);
     setJob(null);
-    setUpscale(false);
+    setScale(1);
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   const phaseLabel: Record<string, string> = {
     resolving: "Resolving URL…",
     downloading: "Downloading…",
-    upscaling: "Upscaling 2×…",
+    upscaling: "Upscaling…",
     done: "Complete",
   };
 
@@ -166,31 +167,27 @@ export default function Home() {
             />
           </div>
 
-          {/* Upscale Toggle */}
-          <label className="flex items-center justify-between px-4 py-3 bg-surface-raised border border-border rounded-xl cursor-pointer hover:bg-surface-hover transition-colors">
-            <div>
-              <span className="text-sm font-medium text-ink">Upscale 2×</span>
-              <span className="ml-2 text-xs text-ink-dim">
-                Double resolution via lanczos
-              </span>
+          {/* Scale selector — segmented control */}
+          <div className="space-y-1.5">
+            <span className="text-xs text-ink-dim px-1">Resolution</span>
+            <div className="flex bg-surface-raised border border-border rounded-xl p-1 gap-1">
+              {([1, 2, 4] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setScale(s)}
+                  disabled={isActive}
+                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
+                    scale === s
+                      ? "bg-surface text-ink shadow-sm"
+                      : "text-ink-dim hover:text-ink-muted"
+                  } disabled:opacity-50`}
+                >
+                  {s}×
+                </button>
+              ))}
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={upscale}
-              onClick={() => setUpscale(!upscale)}
-              disabled={isActive}
-              className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors ${
-                upscale ? "bg-accent" : "bg-surface-hover"
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
-                  upscale ? "translate-x-5" : "translate-x-1"
-                }`}
-              />
-            </button>
-          </label>
+          </div>
 
           {/* Submit */}
           <button
@@ -243,7 +240,7 @@ export default function Home() {
             <div className="flex items-center gap-2 px-1">
               <p className="text-sm text-ink truncate flex-1">{job?.filename || "video.mp4"}</p>
               <span className="shrink-0 text-[11px] px-2 py-0.5 rounded-full bg-surface-raised border border-border text-ink-dim">
-                {job?.upscale ? "2× Upscaled" : "Original"}
+                {job?.upscale ? `${job.scale ?? 2}× Upscaled` : "Original"}
               </span>
             </div>
 

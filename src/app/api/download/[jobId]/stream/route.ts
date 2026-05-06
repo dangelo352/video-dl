@@ -20,6 +20,7 @@ export async function GET(
           filename: j.filename,
           error: j.error,
           upscale: j.upscale,
+          scale: j.scale,
         });
         controller.enqueue(encoder.encode(`data: ${data}\n\n`));
       };
