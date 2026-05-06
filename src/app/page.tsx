@@ -1,16 +1,58 @@
 "use client";
 
-import { useState, useRef, FormEvent } from "react";
+import { useState, useRef, FormEvent, useEffect } from "react";
 
-type Status = "idle" | "downloading" | "upscaling" | "done" | "error";
+type JobStatus = "resolving" | "downloading" | "upscaling" | "done" | "error";
+
+interface JobState {
+  jobId: string;
+  status: JobStatus;
+  progress: number;
+  speed: string;
+  eta: string;
+  error: string;
+  filename: string;
+}
 
 export default function Home() {
   const [url, setUrl] = useState("");
   const [upscale, setUpscale] = useState(false);
-  const [status, setStatus] = useState<Status>("idle");
+  const [job, setJob] = useState<JobState | null>(null);
+  const [status, setStatus] = useState<JobStatus | "idle">("idle");
   const [error, setError] = useState("");
-  const [jobId, setJobId] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Poll for progress
+  useEffect(() => {
+    if (!job || job.status === "done" || job.status === "error") return;
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/download/${job.jobId}`);
+        if (!res.ok) return;
+        const data: JobState = await res.json();
+        setJob(data);
+        setStatus(data.status);
+
+        if (data.status === "done") {
+          if (pollRef.current) clearInterval(pollRef.current);
+          // Trigger file download
+          const a = document.createElement("a");
+          a.href = `/api/download/${job.jobId}`;
+          a.download = data.filename || "video.mp4";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        } else if (data.status === "error") {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setError(data.error || "Something went wrong");
+        }
+      } catch {}
+    }, 300);
+
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [job?.jobId]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -26,8 +68,8 @@ export default function Home() {
       return;
     }
 
-    setStatus(upscale ? "downloading" : "downloading");
     setError("");
+    setStatus("resolving");
 
     try {
       const res = await fetch("/api/download", {
@@ -38,27 +80,12 @@ export default function Home() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Download failed (${res.status})`);
+        throw new Error(data.error || `Request failed (${res.status})`);
       }
 
-      const blob = await res.blob();
-      const filename =
-        res.headers
-          .get("Content-Disposition")
-          ?.match(/filename="?(.+?)"?$/)?.[1] || "video.mp4";
-
-      // Trigger download
-      const downloadUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(downloadUrl);
-
-      setJobId(res.headers.get("X-Job-Id") || "");
-      setStatus("done");
+      const data: JobState = await res.json();
+      setJob(data);
+      setStatus(data.status);
     } catch (err: any) {
       setError(err.message || "Something went wrong");
       setStatus("error");
@@ -66,12 +93,20 @@ export default function Home() {
   };
 
   const reset = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     setStatus("idle");
     setError("");
     setUrl("");
-    setJobId("");
+    setJob(null);
     setUpscale(false);
     setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const phaseLabel: Record<string, string> = {
+    resolving: "Resolving URL…",
+    downloading: "Downloading…",
+    upscaling: "Upscaling 2×…",
+    done: "Complete",
   };
 
   return (
@@ -99,7 +134,7 @@ export default function Home() {
                 if (error) setError("");
               }}
               placeholder="https://x.com/user/status/123…"
-              disabled={status === "downloading" || status === "upscaling"}
+              disabled={job !== null && job.status !== "done" && job.status !== "error"}
               className="w-full h-14 px-4 text-base bg-surface-raised border border-border rounded-xl text-ink placeholder:text-ink-dim focus:border-border-focus focus:ring-0 disabled:opacity-50 transition-colors font-mono text-sm"
               autoFocus
             />
@@ -118,7 +153,7 @@ export default function Home() {
               role="switch"
               aria-checked={upscale}
               onClick={() => setUpscale(!upscale)}
-              disabled={status === "downloading" || status === "upscaling"}
+              disabled={job !== null && job.status !== "done" && job.status !== "error"}
               className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors ${
                 upscale ? "bg-accent" : "bg-surface-hover"
               }`}
@@ -135,59 +170,44 @@ export default function Home() {
           <button
             type="submit"
             disabled={
-              !url.trim() || status === "downloading" || status === "upscaling"
+              !url.trim() || (job !== null && job.status !== "done" && job.status !== "error")
             }
             className="w-full h-12 rounded-xl bg-ink text-surface font-medium text-sm transition-all hover:bg-ink/90 disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.98]"
           >
-            {status === "downloading" || status === "upscaling"
-              ? "Downloading…"
+            {job && job.status !== "done" && job.status !== "error"
+              ? phaseLabel[job.status] || "Working…"
               : "Download"}
           </button>
         </form>
 
-        {/* Status */}
-        {(status === "downloading" || status === "upscaling") && (
-          <div className="mt-6 flex items-center justify-center gap-2 text-sm text-ink-muted">
-            <svg
-              className="animate-spin h-4 w-4"
-              viewBox="0 0 24 24"
-              fill="none"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
+        {/* Progress bar */}
+        {job && job.status !== "done" && job.status !== "error" && (
+          <div className="mt-6 space-y-3">
+            <div className="flex items-center justify-between text-xs text-ink-muted">
+              <span>{phaseLabel[job.status] || "Working…"}</span>
+              <span className="font-mono tabular-nums">{job.progress}%</span>
+            </div>
+            <div className="h-2 bg-surface-raised rounded-full overflow-hidden">
+              <div
+                className="h-full bg-accent rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${Math.max(job.progress, 2)}%` }}
               />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
-            </svg>
-            {status === "upscaling" ? "Upscaling…" : "Fetching video…"}
+            </div>
+            <div className="flex justify-between text-xs text-ink-dim">
+              {job.speed && <span>{job.speed}</span>}
+              {job.eta && <span className="font-mono">ETA {job.eta}</span>}
+            </div>
           </div>
         )}
 
+        {/* Done */}
         {status === "done" && (
           <div className="mt-6 space-y-3">
             <div className="flex items-center gap-2 text-sm text-success">
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Downloaded — check your downloads folder
+              Downloaded — {job?.filename || "check your downloads"}
             </div>
             <button
               onClick={reset}
@@ -198,21 +218,12 @@ export default function Home() {
           </div>
         )}
 
+        {/* Error */}
         {status === "error" && (
           <div className="mt-6 space-y-3">
             <div className="flex items-start gap-2 text-sm text-danger">
-              <svg
-                className="h-4 w-4 mt-0.5 shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
+              <svg className="h-4 w-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>{error}</span>
             </div>
