@@ -23,6 +23,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const esRef = useRef<EventSource | null>(null);
+  const maxProgressRef = useRef(0);
 
   // Connect SSE when we have a jobId
   useEffect(() => {
@@ -34,13 +35,22 @@ export default function Home() {
       esRef.current = null;
     }
 
+    maxProgressRef.current = 0;
+
     const es = new EventSource(`/api/download/${jobId}/stream`);
     esRef.current = es;
 
     es.onmessage = (event) => {
       try {
         const data: JobState = JSON.parse(event.data);
-        setJob(data);
+        
+        // Never let progress go backwards (yt-dlp multi-stream artifact)
+        if (data.progress > maxProgressRef.current) {
+          maxProgressRef.current = data.progress;
+        }
+        const displayData = { ...data, progress: maxProgressRef.current };
+        
+        setJob(displayData);
         setStatus(data.status);
 
         if (data.status === "done") {
@@ -227,30 +237,33 @@ export default function Home() {
                 style={{ maxHeight: "60vh" }}
                 src={`/api/download/${jobId}`}
               />
-              <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm truncate text-ink">{job?.filename || "video.mp4"}</p>
-                  <p className="text-xs text-ink-dim mt-0.5">
-                    {job?.upscale ? "Upscaled 2×" : "Original quality"}
-                  </p>
-                </div>
-                <a
-                  href={`/api/download/${jobId}?dl=1`}
-                  download={job?.filename}
-                  className="ml-3 shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/15 text-accent text-xs font-medium hover:bg-accent/25 transition-colors"
-                >
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Download
-                </a>
-              </div>
             </div>
+
+            {/* File info */}
+            <div className="flex items-center gap-2 px-1">
+              <p className="text-sm text-ink truncate flex-1">{job?.filename || "video.mp4"}</p>
+              <span className="shrink-0 text-[11px] px-2 py-0.5 rounded-full bg-surface-raised border border-border text-ink-dim">
+                {job?.upscale ? "2× Upscaled" : "Original"}
+              </span>
+            </div>
+
+            {/* Download Button — big, primary */}
+            <a
+              href={`/api/download/${jobId}?dl=1`}
+              download={job?.filename}
+              className="flex items-center justify-center gap-2 w-full h-12 rounded-xl bg-accent text-surface font-medium text-sm transition-all hover:bg-accent-hover active:scale-[0.98]"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Download Video
+            </a>
+
             <button
               onClick={reset}
-              className="text-sm text-ink-muted hover:text-ink transition-colors underline underline-offset-2"
+              className="block w-full text-center text-sm text-ink-muted hover:text-ink transition-colors underline underline-offset-2"
             >
-              Download another
+              Get another video
             </button>
           </div>
         )}
