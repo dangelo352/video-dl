@@ -1,26 +1,48 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+
+  --color-ink: #fafafa;
+  --color-ink-muted: #a1a1aa;
+  --color-ink-dim: #71717a;
+  --color-surface: #09090b;
+  --color-surface-raised: #18181b;
+  --color-surface-hover: #27272a;
+  --color-border: #27272a;
+  --color-border-focus: #3f3f46;
+  --color-accent: #f59e0b;
+  --color-accent-hover: #d97706;
+  --color-accent-muted: rgba(245, 158, 11, 0.12);
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100dvh;
+}
+
+/* Input ring */
+input:focus-visible {
+  outline: none;
+  ring: 1px solid var(--color-border-focus);
+}
+
+/* Scrollbar — thin, dark */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
 }
