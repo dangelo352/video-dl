@@ -22,21 +22,40 @@ export default function Home() {
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingForRef = useRef<string | null>(null);
 
   // Poll for progress
   useEffect(() => {
-    if (!job || job.status === "done" || job.status === "error") return;
+    if (!job) return;
+    if (job.status === "done" || job.status === "error") return;
+    
+    // Prevent duplicate intervals for same job
+    if (pollingForRef.current === job.jobId) return;
+    
+    // Clear any previous polling
+    if (pollRef.current) clearInterval(pollRef.current);
+    
+    pollingForRef.current = job.jobId;
 
-    pollRef.current = setInterval(async () => {
+    const poll = async () => {
       try {
         const res = await fetch(`/api/download/${job.jobId}`);
         if (!res.ok) return;
         const data: JobState = await res.json();
+
+        // STOP immediately if terminal state
+        if (data.status === "done" || data.status === "error") {
+          if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
+          pollingForRef.current = null;
+        }
+
         setJob(data);
         setStatus(data.status);
 
         if (data.status === "done") {
-          if (pollRef.current) clearInterval(pollRef.current);
           // Trigger file download
           const a = document.createElement("a");
           a.href = `/api/download/${job.jobId}`;
@@ -45,14 +64,21 @@ export default function Home() {
           a.click();
           document.body.removeChild(a);
         } else if (data.status === "error") {
-          if (pollRef.current) clearInterval(pollRef.current);
           setError(data.error || "Something went wrong");
         }
       } catch {}
-    }, 300);
+    };
 
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [job?.jobId]);
+    pollRef.current = setInterval(poll, 300);
+
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      pollingForRef.current = null;
+    };
+  }, [job?.jobId, job?.status]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -94,6 +120,7 @@ export default function Home() {
 
   const reset = () => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    pollingForRef.current = null;
     setStatus("idle");
     setError("");
     setUrl("");

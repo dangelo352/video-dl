@@ -93,17 +93,30 @@ async function processJob(job: Job) {
   await ensureDir(jobDir);
 
   try {
+    // Normalize Twitter/X URLs — strip query params, use x.com
+    const dlUrl = job.url
+      .replace(/twitter\.com/g, "x.com")
+      .replace(/(https:\/\/x\.com\/\w+\/status\/\d+)\?.*/, "$1");
+
+    // Twitter/X needs GraphQL API to work headless
+    const isTwitter = dlUrl.includes("x.com") || dlUrl.includes("twitter.com");
+    const extraArgs = isTwitter 
+      ? ["--extractor-args", "twitter:force_graphql=1", "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"] 
+      : [];
+
     // Step 1: Resolve filename
     job.status = "resolving";
     const peek = await runWithProgress(job, YT_DLP, [
       "--no-playlist",
+      ...extraArgs,
       "--print", "filename",
       "-o", "%(title).100B-%(id)s.%(ext)s",
-      job.url,
+      dlUrl,
     ], "resolving");
 
     if (peek.code !== 0) {
-      throw new Error("Failed to resolve URL — unsupported or private?");
+      const errDetail = peek.stderr.split('\n').filter(l => l.includes('ERROR') || l.includes('WARNING') || l.includes('error')).slice(-3).join(' | ') || peek.stderr.slice(-200);
+      throw new Error(`URL resolve failed: ${errDetail}`);
     }
 
     const rawFilename = peek.stdout.trim();
@@ -113,9 +126,10 @@ async function processJob(job: Job) {
     job.status = "downloading";
     const dl = await runWithProgress(job, YT_DLP, [
       "--no-playlist",
+      ...extraArgs,
       "--newline",            // Line-buffered output for progress
       "-o", path.join(jobDir, "%(title).100B-%(id)s.%(ext)s"),
-      job.url,
+      dlUrl,
     ], "downloading");
 
     if (dl.code !== 0) {
