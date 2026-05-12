@@ -14,7 +14,7 @@ export interface Job {
   url: string;
   scale: number; // 0=no upscale, 2=2x, 4=4x
   upscale: boolean; // derived: scale > 0
-  status: "resolving" | "downloading" | "upscaling" | "done" | "error";
+  status: "resolving" | "downloading" | "converting" | "upscaling" | "done" | "error";
   progress: number; // 0-100
   speed: string;    // e.g. "2.5 MiB/s"
   eta: string;      // e.g. "00:15"
@@ -131,12 +131,13 @@ async function processJob(job: Job) {
     const rawFilename = peek.stdout.trim();
     if (!rawFilename) throw new Error("No video found at this URL");
 
-    // Step 2: Download
+    // Step 2: Download — force mp4 to avoid webm from YouTube Shorts
     job.status = "downloading";
     const dl = await runWithProgress(job, YT_DLP, [
       "--no-playlist",
       ...extraArgs,
       "--newline",            // Line-buffered output for progress
+      "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
       "-o", path.join(jobDir, "%(title).100B-%(id)s.%(ext)s"),
       dlUrl,
     ], "downloading");
@@ -155,6 +156,26 @@ async function processJob(job: Job) {
 
     let downloadedFile = path.join(jobDir, videoFiles[0]);
     let finalName = videoFiles[0];
+
+    // Safety net: if we got a webm (e.g. YouTube Shorts), remux to mp4
+    if (finalName.toLowerCase().endsWith(".webm")) {
+      job.status = "converting";
+      job.progress = 0;
+      const mp4Name = path.parse(finalName).name + ".mp4";
+      const mp4Path = path.join(jobDir, mp4Name);
+      const convertResult = await runCommand(FFMPEG, [
+        "-y", "-i", downloadedFile,
+        "-c:v", "libx264", "-crf", "23", "-preset", "fast",
+        "-c:a", "aac", "-b:a", "128k",
+        "-movflags", "+faststart",
+        mp4Path,
+      ]);
+      if (convertResult.code === 0) {
+        await unlink(downloadedFile).catch(() => {});
+        downloadedFile = mp4Path;
+        finalName = mp4Name;
+      }
+    }
 
     // Step 3: Upscale if requested
     if (job.upscale) {
