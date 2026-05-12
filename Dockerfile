@@ -10,13 +10,14 @@ RUN npm run build
 FROM node:22-alpine AS runner
 WORKDIR /app
 
-# Install yt-dlp dependencies
-RUN apk add --no-cache \
-    ffmpeg \
-    python3 \
-    py3-pip \
-    curl \
-    && pip3 install --break-system-packages yt-dlp \
+# Install yt-dlp + deno (JS runtime for YouTube extraction)
+RUN apk add --no-cache \\
+    ffmpeg \\
+    python3 \\
+    py3-pip \\
+    curl \\
+    deno \\
+    && pip3 install --break-system-packages yt-dlp \\
     && rm -rf /root/.cache/pip
 
 ENV NODE_ENV=production
