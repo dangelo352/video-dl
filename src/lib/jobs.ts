@@ -9,13 +9,8 @@ export const DOWNLOAD_DIR = path.join(os.tmpdir(), "video-dl");
 const YT_DLP = process.env.YT_DLP_PATH || "yt-dlp";
 const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
 
-// YouTube cookies — if YOUTUBE_COOKIES env var is set (base64), decode to temp file
-let COOKIES_FILE = "";
-if (process.env.YOUTUBE_COOKIES) {
-  COOKIES_FILE = path.join(os.tmpdir(), "yt_cookies.txt");
-  const decoded = Buffer.from(process.env.YOUTUBE_COOKIES, "base64").toString("utf-8");
-  import("fs/promises").then(fs => fs.writeFile(COOKIES_FILE, decoded)).catch(() => {});
-}
+// YouTube needs android client on headless/Railway to avoid bot detection
+const YT_ARGS = ["--extractor-args", "youtube:player_client=android"];
 
 export interface Job {
   id: string;
@@ -119,16 +114,16 @@ async function processJob(job: Job) {
       ? ["--extractor-args", "twitter:force_graphql=1", "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"] 
       : [];
 
-    // YouTube needs cookies for bot detection bypass on headless/Railway
+    // YouTube needs android client on Railway to avoid bot detection
     const isYoutube = dlUrl.includes("youtube.com") || dlUrl.includes("youtu.be");
-    const cookieArgs = (isYoutube && COOKIES_FILE) ? ["--cookies", COOKIES_FILE] : [];
+    const ytArgs = isYoutube ? YT_ARGS : [];
 
     // Step 1: Resolve filename
     job.status = "resolving";
     const peek = await runWithProgress(job, YT_DLP, [
       "--no-playlist",
       ...extraArgs,
-      ...cookieArgs,
+      ...ytArgs,
       "--print", "filename",
       "-o", "%(title).100B-%(id)s.%(ext)s",
       dlUrl,
@@ -149,7 +144,7 @@ async function processJob(job: Job) {
     const dl = await runWithProgress(job, YT_DLP, [
       "--no-playlist",
       ...extraArgs,
-      ...cookieArgs,
+      ...ytArgs,
       "--newline",            // Line-buffered output for progress
       "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
       "-o", path.join(jobDir, "%(title).100B-%(id)s.%(ext)s"),
