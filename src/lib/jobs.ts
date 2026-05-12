@@ -166,7 +166,7 @@ async function processJob(job: Job) {
       const convertResult = await runCommand(FFMPEG, [
         "-y", "-i", downloadedFile,
         "-c:v", "libx264", "-crf", "23", "-preset", "fast",
-        "-c:a", "aac", "-b:a", "128k",
+        "-c:a", "copy",
         "-movflags", "+faststart",
         mp4Path,
       ]);
