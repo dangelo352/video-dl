@@ -78,10 +78,6 @@ function installerScript(origin: string) {
 set -euo pipefail
 
 skill_name="video-dl"
-skill_body=$(cat <<'SKILL_EOF'
-${skill}
-SKILL_EOF
-)
 
 install_skill() {
   local root="$1"
@@ -89,7 +85,9 @@ install_skill() {
   local dir="$root/$skill_name"
 
   mkdir -p "$dir"
-  printf "%s\\n" "$skill_body" > "$dir/SKILL.md"
+  cat > "$dir/SKILL.md" <<'SKILL_EOF'
+${skill}
+SKILL_EOF
   printf "Installed %s skill: %s\\n" "$label" "$dir/SKILL.md"
 }
 
