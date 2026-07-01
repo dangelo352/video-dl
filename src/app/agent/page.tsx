@@ -1,6 +1,5 @@
 export default function AgentInstallPage() {
-  const installCommand = "curl -fsSL /api/agent/install | bash";
-  const absoluteInstallCommand = "curl -fsSL https://YOUR-DOMAIN/api/agent/install | bash";
+  const installCommand = "curl -fsSL https://dload.org/api/agent/install | bash";
 
   return (
     <main className="min-h-dvh px-4 py-10 md:py-16">
@@ -22,13 +21,8 @@ export default function AgentInstallPage() {
         <section className="space-y-3">
           <h2 className="text-sm font-medium text-ink">Install</h2>
           <pre className="overflow-x-auto rounded-lg border border-border bg-surface-raised p-4 text-sm text-ink">
-            <code>{absoluteInstallCommand}</code>
+            <code>{installCommand}</code>
           </pre>
-          <p className="text-xs leading-5 text-ink-dim">
-            Replace <span className="font-mono text-ink-muted">YOUR-DOMAIN</span>{" "}
-            with this deployment&apos;s domain. From the same origin, use{" "}
-            <span className="font-mono text-ink-muted">{installCommand}</span>.
-          </p>
         </section>
 
         <section className="mt-8 space-y-3">
@@ -58,7 +52,7 @@ export default function AgentInstallPage() {
         <section className="mt-8 space-y-3">
           <h2 className="text-sm font-medium text-ink">API Example</h2>
           <pre className="overflow-x-auto rounded-lg border border-border bg-surface-raised p-4 text-sm text-ink">
-            <code>{`curl -X POST https://YOUR-DOMAIN/api/agent/videos \\
+            <code>{`curl -X POST https://dload.org/api/agent/videos \\
   -H "Content-Type: application/json" \\
   -d '{"url":"https://x.com/user/status/123","scale":0}'`}</code>
           </pre>
