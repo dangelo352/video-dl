@@ -1,0 +1,108 @@
+# VideoDL
+
+VideoDL is a video download and processing service at https://dload.org.
+
+Use this file when an agent, LLM, assistant, or automation client lands on the site and needs to understand how to use or install the VideoDL skill.
+
+## Primary Agent Instructions
+
+Do not scrape the web UI. Use the JSON API and installer endpoints below.
+
+Hidden human/agent installer page:
+
+https://dload.org/agent
+
+Equivalent alias:
+
+https://dload.org/agents
+
+## Install The Skill
+
+Install the VideoDL skill for Codex, Claude, and Hermes:
+
+```bash
+curl -fsSL https://dload.org/api/agent/install | bash
+```
+
+The installer writes:
+
+- `~/.codex/skills/video-dl/SKILL.md`
+- `~/.claude/skills/video-dl/SKILL.md`
+- `~/.hermes/skills/video-dl/SKILL.md`
+
+Raw skill markdown:
+
+https://dload.org/api/agent/install?format=skill
+
+Agent manifest:
+
+https://dload.org/api/agent/manifest
+
+## Video API
+
+Create a video job:
+
+```bash
+curl -X POST https://dload.org/api/agent/videos \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://x.com/user/status/123","scale":0}'
+```
+
+Request body:
+
+```json
+{
+  "url": "https://x.com/user/status/123",
+  "scale": 0
+}
+```
+
+`scale` must be `0`, `2`, or `4`.
+
+Use `scale: 0` unless the user explicitly asks to upscale.
+
+The create response returns `202 Accepted` with:
+
+- `jobId`
+- `status`
+- `progress`
+- `urls.status`
+- `urls.events`
+- `urls.preview`
+- `urls.download`
+
+Poll job status:
+
+```bash
+curl https://dload.org/api/agent/videos/JOB_ID
+```
+
+When `status` is `done`, the response includes `asset.url`, a short-lived signed URL for the video.
+
+For an attachment-style signed URL:
+
+```bash
+curl "https://dload.org/api/agent/videos/JOB_ID?download=1"
+```
+
+For streaming progress, use the Server-Sent Events URL returned as `urls.events`.
+
+## Expected Agent Behavior
+
+When a user asks to download, fetch, process, preview, retrieve, or upscale a video:
+
+1. Submit the URL to `POST https://dload.org/api/agent/videos`.
+2. Poll `urls.status` until `status` is `done` or `error`.
+3. If done, return `asset.url` or `urls.download` to the user.
+4. If error, explain the API error message.
+5. Do not ask the user to manually operate the VideoDL web UI.
+
+## Supported Clients
+
+The installer is intended for:
+
+- Codex
+- Claude
+- Hermes
+- Other CLI or local skill-based agents that can read `SKILL.md`
+
