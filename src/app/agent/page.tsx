@@ -1,3 +1,27 @@
+"use client";
+
+import { useState } from "react";
+
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className="absolute right-2 top-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:border-border-focus hover:text-ink"
+    >
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
 export default function AgentInstallPage() {
   const installCommand = "curl -fsSL https://dload.org/api/agent/install | bash";
 
@@ -20,9 +44,12 @@ export default function AgentInstallPage() {
 
         <section className="space-y-3">
           <h2 className="text-sm font-medium text-ink">Install</h2>
-          <pre className="overflow-x-auto rounded-lg border border-border bg-surface-raised p-4 text-sm text-ink">
-            <code>{installCommand}</code>
-          </pre>
+          <div className="relative">
+            <pre className="overflow-x-auto rounded-lg border border-border bg-surface-raised p-4 pr-24 text-sm text-ink">
+              <code>{installCommand}</code>
+            </pre>
+            <CopyButton value={installCommand} />
+          </div>
         </section>
 
         <section className="mt-8 space-y-3">
