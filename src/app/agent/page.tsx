@@ -15,9 +15,34 @@ function CopyButton({ value }: { value: string }) {
     <button
       type="button"
       onClick={copy}
-      className="absolute right-2 top-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:border-border-focus hover:text-ink"
+      aria-label={copied ? "Copied install command" : "Copy install command"}
+      title={copied ? "Copied" : "Copy"}
+      className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-md border border-border bg-surface/70 text-ink-muted backdrop-blur transition-colors hover:border-border-focus hover:bg-surface hover:text-ink"
     >
-      {copied ? "Copied" : "Copy"}
+      {copied ? (
+        <svg
+          aria-hidden="true"
+          className="h-4 w-4 text-success"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="m5 13 4 4L19 7" />
+        </svg>
+      ) : (
+        <svg
+          aria-hidden="true"
+          className="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <rect width="13" height="13" x="9" y="9" rx="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      )}
     </button>
   );
 }
@@ -45,7 +70,7 @@ export default function AgentInstallPage() {
         <section className="space-y-3">
           <h2 className="text-sm font-medium text-ink">Install</h2>
           <div className="relative">
-            <pre className="overflow-x-auto rounded-lg border border-border bg-surface-raised p-4 pr-24 text-sm text-ink">
+            <pre className="overflow-x-auto rounded-lg border border-border bg-surface-raised p-4 pr-14 text-sm text-ink">
               <code>{installCommand}</code>
             </pre>
             <CopyButton value={installCommand} />
