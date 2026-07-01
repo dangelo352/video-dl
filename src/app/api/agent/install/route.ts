@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { getPublicOrigin } from "@/lib/origin";
 
 function skillMarkdown(origin: string) {
   return `# VideoDL Agent Skill
@@ -83,7 +84,7 @@ printf "\\nVideoDL agent skill installed. API base: ${origin}\\n"
 }
 
 export async function GET(request: NextRequest) {
-  const origin = request.nextUrl.origin;
+  const origin = getPublicOrigin(request);
   const format = request.nextUrl.searchParams.get("format");
   const body = format === "skill" ? skillMarkdown(origin) : installerScript(origin);
   const contentType = format === "skill" ? "text/markdown" : "text/x-shellscript";

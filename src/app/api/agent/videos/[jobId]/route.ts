@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJob } from "@/lib/jobs";
 import { getSignedR2Url } from "@/lib/r2";
+import { getPublicOrigin } from "@/lib/origin";
 
 function jobUrls(request: NextRequest, jobId: string) {
-  const origin = request.nextUrl.origin;
+  const origin = getPublicOrigin(request);
 
   return {
     status: `${origin}/api/agent/videos/${jobId}`,

@@ -2,6 +2,7 @@ import { mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import { NextRequest, NextResponse } from "next/server";
 import { createJob, DOWNLOAD_DIR } from "@/lib/jobs";
+import { getPublicOrigin } from "@/lib/origin";
 
 type AgentVideoRequest = {
   url?: string;
@@ -11,10 +12,6 @@ type AgentVideoRequest = {
 
 async function ensureDir(dir: string) {
   if (!existsSync(dir)) await mkdir(dir, { recursive: true });
-}
-
-function getOrigin(request: NextRequest) {
-  return request.nextUrl.origin;
 }
 
 function normalizeScale(body: AgentVideoRequest) {
@@ -54,7 +51,7 @@ export async function POST(request: NextRequest) {
   }
 
   const job = createJob(url, scale);
-  const origin = getOrigin(request);
+  const origin = getPublicOrigin(request);
 
   return NextResponse.json(
     {
