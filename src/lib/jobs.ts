@@ -85,19 +85,6 @@ function parseProgress(line: string): { pct: number; speed: string; eta: string 
   return null;
 }
 
-function parseFfmpegProgress(line: string): { pct: number; speed: string } | null {
-  // ffmpeg: "frame=  120 fps=45 q=28.0 size=    1024kB time=00:00:05.00 bitrate=..."
-  const timeMatch = line.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
-  if (!timeMatch) return null;
-  // We need total duration to calculate percentage
-  // For now return rough frame-based progress
-  const frameMatch = line.match(/frame=\s*(\d+)/);
-  if (frameMatch) {
-    return { pct: -1, speed: "" }; // Signal we got output but can't calc %
-  }
-  return null;
-}
-
 async function processJob(job: Job) {
   const jobDir = path.join(DOWNLOAD_DIR, job.id);
   await ensureDir(jobDir);
@@ -245,9 +232,9 @@ async function processJob(job: Job) {
     job.r2Key = r2Key;
     job.progress = 100;
     job.eta = "Done";
-  } catch (err: any) {
+  } catch (err: unknown) {
     job.status = "error";
-    job.error = err.message || "Unknown error";
+    job.error = err instanceof Error ? err.message : "Unknown error";
   }
 }
 

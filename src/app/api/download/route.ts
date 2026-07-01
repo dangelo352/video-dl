@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mkdir } from "fs/promises";
 import { existsSync } from "fs";
-import path from "path";
-import os from "os";
 import { createJob, DOWNLOAD_DIR } from "@/lib/jobs";
 
 async function ensureDir(dir: string) {
@@ -12,7 +10,7 @@ async function ensureDir(dir: string) {
 export async function POST(request: NextRequest) {
   await ensureDir(DOWNLOAD_DIR);
 
-  let body: { url?: string; upscale?: boolean };
+  let body: { url?: string; upscale?: boolean | number };
   try {
     body = await request.json();
   } catch {

@@ -36,3 +36,25 @@ FFMPEG_PATH=ffmpeg
 - Frontend UX stays the same (preview + download button)
 
 This offloads delivery bandwidth from Railway to R2.
+
+## Agent API
+
+Use this JSON API from Hermes, Claude, Codex, or another automation client.
+
+Create a video job:
+
+```bash
+curl -X POST https://your-domain/api/agent/videos \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://x.com/user/status/123","scale":0}'
+```
+
+`scale` can be `0`, `2`, or `4`. The response returns `202 Accepted` with a `jobId` plus status, event-stream, preview, and download URLs.
+
+Poll job status:
+
+```bash
+curl https://your-domain/api/agent/videos/JOB_ID
+```
+
+When `status` is `done`, the response includes `asset.url`, a short-lived signed R2 URL. Use `?download=1` on the status URL to request an attachment-style signed asset URL.

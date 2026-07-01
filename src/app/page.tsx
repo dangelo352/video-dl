@@ -107,8 +107,8 @@ export default function Home() {
       const data = await res.json();
       setJobId(data.jobId);
       setStatus("resolving");
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
       setStatus("error");
     }
   };

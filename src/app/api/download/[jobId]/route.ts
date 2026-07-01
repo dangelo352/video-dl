@@ -41,9 +41,9 @@ export async function GET(
     });
 
     return NextResponse.redirect(signedUrl, { status: 302 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { error: err?.message || "Failed to generate file URL" },
+      { error: err instanceof Error ? err.message : "Failed to generate file URL" },
       { status: 500 }
     );
   }
