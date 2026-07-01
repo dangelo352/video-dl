@@ -41,6 +41,23 @@ Poll until \`status\` is \`done\` or \`error\`.
 
 When done, use \`asset.url\` for the signed video URL. Use \`${origin}/api/agent/videos/{jobId}?download=1\` when an attachment-style signed URL is needed.
 
+## Save The File Locally
+
+Default behavior for local agents:
+
+1. Create \`~/Downloads/VideoDL\` if it does not exist.
+2. Use the \`filename\` field returned by the status response. Preserve that filename from VideoDL instead of inventing a new name.
+3. Download from \`urls.download\` or from \`${origin}/api/download/{jobId}?dl=1\`.
+4. Save to \`~/Downloads/VideoDL/<filename>\`.
+5. Tell the user exactly where the file was saved, including the full local path, and also provide the preview/download URL.
+
+Example:
+
+\`\`\`bash
+mkdir -p "$HOME/Downloads/VideoDL"
+curl -L --fail "DOWNLOAD_URL" -o "$HOME/Downloads/VideoDL/FILENAME_FROM_STATUS"
+\`\`\`
+
 ## Streaming Status
 
 Use \`urls.events\` for Server-Sent Events when the client supports SSE.
@@ -50,6 +67,7 @@ Use \`urls.events\` for Server-Sent Events when the client supports SSE.
 - Do not scrape the VideoDL web UI.
 - Prefer the JSON API for all automation.
 - Signed asset URLs expire, so fetch a fresh status response before handing a final link to a user.
+- If running on the user's machine, download completed files into \`~/Downloads/VideoDL\` using the exact \`filename\` returned by VideoDL.
 `;
 }
 

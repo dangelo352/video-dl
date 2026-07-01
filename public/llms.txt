@@ -87,15 +87,46 @@ curl "https://dload.org/api/agent/videos/JOB_ID?download=1"
 
 For streaming progress, use the Server-Sent Events URL returned as `urls.events`.
 
+## Local Download Behavior
+
+Agents running on the user's machine should save completed videos locally by default.
+
+Download folder:
+
+```text
+~/Downloads/VideoDL/
+```
+
+Use the exact `filename` returned by `GET https://dload.org/api/agent/videos/JOB_ID`. Do not invent a new filename unless the API omits one.
+
+Download command pattern:
+
+```bash
+mkdir -p "$HOME/Downloads/VideoDL"
+curl -L --fail "DOWNLOAD_URL" -o "$HOME/Downloads/VideoDL/FILENAME_FROM_STATUS"
+```
+
+Use `urls.download` as `DOWNLOAD_URL`.
+
+After saving the file, tell the user in depth:
+
+- the full local file path
+- the original VideoDL filename
+- the file size if available
+- the preview URL
+- the download URL
+
 ## Expected Agent Behavior
 
 When a user asks to download, fetch, process, preview, retrieve, or upscale a video:
 
 1. Submit the URL to `POST https://dload.org/api/agent/videos`.
 2. Poll `urls.status` until `status` is `done` or `error`.
-3. If done, return `asset.url` or `urls.download` to the user.
-4. If error, explain the API error message.
-5. Do not ask the user to manually operate the VideoDL web UI.
+3. If done, create `~/Downloads/VideoDL/`.
+4. Save the video using the exact `filename` returned by the status response.
+5. Tell the user the exact local path and include the preview/download URLs.
+6. If error, explain the API error message.
+7. Do not ask the user to manually operate the VideoDL web UI.
 
 ## Supported Clients
 
@@ -105,4 +136,3 @@ The installer is intended for:
 - Claude
 - Hermes
 - Other CLI or local skill-based agents that can read `SKILL.md`
-
